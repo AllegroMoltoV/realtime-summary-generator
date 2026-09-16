@@ -63,6 +63,29 @@ AUDIO_INPUT_DEVICE=12
 
 ログでは、`microphone_started`、OpenAI の `connected`、`input_status`、`audio_chunks_dropped` を確認します。
 
+## OpenAI との接続が切れる
+
+一時的なネットワーク障害や WebSocket の切断が発生すると、最大 5 回まで自動で再接続します。待機時間は再試行ごとに長くなり、16 秒を上限とします。接続が 60 秒以上継続した場合は、連続再試行回数を 0 に戻します。
+
+次のイベントと項目を時刻順に確認します。
+
+- `connection_lost`: 切断または一時的な接続失敗を検出した記録
+- `received_close_code`、`received_close_reason`: サーバーから受信した Close フレーム
+- `sent_close_code`、`sent_close_reason`: クライアントから送信した Close フレーム
+- `duration_ms`: 接続開始から切断検出までの時間
+- `reconnect_scheduled`: 次の再接続を予約した記録
+- `retry_count`、`retry_delay_seconds`: 再試行回数と待機時間
+- `audio_chunks_discarded`: 再接続前に破棄した古い音声チャンク数
+- `transcription_items_discarded`、`partial_captions_discarded`: 再接続前に破棄した未完了の発話数と認識途中の字幕数
+- `timing_items_discarded`: 再接続前に破棄した処理時間計測中の発話数
+- `reconnect_exhausted`: 最大再試行回数へ到達した記録
+- `ping_interval_seconds`、`ping_timeout_seconds`: 接続時に指定した WebSocket の Ping 間隔とタイムアウト
+- `max_retries`、`retry_base_delay_seconds`、`retry_max_delay_seconds`、`stable_connection_seconds`: 実行時の再接続ポリシー
+
+Close フレームを受信しないまま接続が失われた場合は、`received_close_code` が `null`、`error_code` が `1006` になります。再接続中に蓄積した音声は破棄するため、切断中の発話は字幕へ反映されません。
+
+認証エラーや API が通知した要求エラーは、同じ要求を繰り返しても回復しないため再試行しません。コンソールに表示されたエラーと同時刻のログを確認してください。
+
 ## 英語字幕が表示されない
 
 日本語字幕が表示される場合は、音声入力と OpenAI の接続は動作しています。次を確認します。

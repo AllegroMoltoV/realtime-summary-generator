@@ -31,6 +31,18 @@ class AudioChunkQueue:
     async def get(self) -> bytes:
         return await self._queue.get()
 
+    def discard_pending(self) -> int:
+        discarded = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            else:
+                discarded += 1
+        self.dropped_chunks += discarded
+        return discarded
+
     def qsize(self) -> int:
         return self._queue.qsize()
 

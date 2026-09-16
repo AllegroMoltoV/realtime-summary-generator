@@ -12,6 +12,7 @@ from typing import Any
 _ALLOWED_FIELDS = frozenset(
     {
         "app_version",
+        "audio_chunks_discarded",
         "audio_chunks_dropped",
         "buffer_cycles",
         "close_code",
@@ -25,19 +26,33 @@ _ALLOWED_FIELDS = frozenset(
         "input_format",
         "input_tokens",
         "item_id",
+        "max_retries",
         "operation_id",
         "output_chars",
         "output_tokens",
         "overflow",
+        "partial_captions_discarded",
+        "ping_interval_seconds",
+        "ping_timeout_seconds",
         "port",
         "previous_item_id",
         "python_version",
         "queue_depth",
         "request_id",
+        "received_close_code",
+        "received_close_reason",
+        "retry_base_delay_seconds",
+        "retry_delay_seconds",
+        "retry_max_delay_seconds",
         "retry_count",
+        "sent_close_code",
+        "sent_close_reason",
         "source_name",
         "stack",
+        "stable_connection_seconds",
         "status",
+        "timing_items_discarded",
+        "transcription_items_discarded",
         "turn_sequence",
     }
 )
@@ -125,7 +140,9 @@ def log_exception(
         }
         for frame in traceback.extract_tb(exc.__traceback__)
     ]
-    error_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    error_code = fields.pop("error_code", None)
+    if error_code is None:
+        error_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
     request_id = getattr(exc, "request_id", None)
     log_event(
         logger,

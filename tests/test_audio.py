@@ -19,6 +19,19 @@ async def test_full_audio_queue_drops_oldest_chunk() -> None:
     assert await chunks.get() == b"newest"
 
 
+def test_discard_pending_audio_drops_every_queued_chunk() -> None:
+    chunks = AudioChunkQueue(max_chunks=3)
+    chunks.put_nowait(b"oldest")
+    chunks.put_nowait(b"middle")
+    chunks.put_nowait(b"newest")
+
+    discarded = chunks.discard_pending()
+
+    assert discarded == 3
+    assert chunks.qsize() == 0
+    assert chunks.dropped_chunks == 3
+
+
 def test_microphone_uses_configured_input_device(monkeypatch: pytest.MonkeyPatch) -> None:
     stream = Mock()
     raw_input_stream = Mock(return_value=stream)

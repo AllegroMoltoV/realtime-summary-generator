@@ -122,6 +122,13 @@ class TurnTracker:
     def sequence_for(self, item_id: str) -> int | None:
         return self._sequence_by_item.get(item_id)
 
+    @property
+    def pending_count(self) -> int:
+        return sum(
+            sequence >= self._next_release
+            for sequence in self._sequence_by_item.values()
+        )
+
     def _require_sequence(self, item_id: str) -> int:
         try:
             return self._sequence_by_item[item_id]
