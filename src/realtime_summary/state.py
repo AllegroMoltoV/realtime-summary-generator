@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from time import monotonic
 
 
 class TurnOrderError(ValueError):
@@ -13,79 +14,70 @@ class CompletedTurn:
     sequence: int
     item_id: str
     transcript: str
+    completed_at: float = field(compare=False)
 
 
 @dataclass(frozen=True, slots=True)
 class SummaryRequest:
-    context_memory: str
     transcripts: tuple[str, ...]
 
 
 class SummaryState:
-    def __init__(self, *, max_cycles: int) -> None:
-        if max_cycles < 1:
-            raise ValueError("max_cycles must be positive")
-        self._max_cycles = max_cycles
-        self._current: list[str] = []
-        self._pending: deque[tuple[str, ...]] = deque()
-        self._in_flight: tuple[str, ...] | None = None
-        self.context_memory = ""
-        self.display_lines: tuple[str, str, str] | None = None
-        self.dropped_cycles = 0
-
-    def add_transcript(self, transcript: str) -> None:
-        if transcript:
-            self._current.append(transcript)
-
-    def begin_update(self) -> SummaryRequest | None:
-        if self._in_flight is not None:
-            return None
-        self._close_current_cycle()
-        if not self._pending:
-            return None
-
-        transcripts = tuple(text for cycle in self._pending for text in cycle)
-        self._pending.clear()
-        self._in_flight = transcripts
-        return SummaryRequest(self.context_memory, transcripts)
-
-    def succeed_update(
+    def __init__(
         self,
         *,
-        context_memory: str,
-        display_lines: tuple[str, str, str],
+        window_seconds: float,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
-        if self._in_flight is None:
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+        self._window_seconds = window_seconds
+        self._clock = clock
+        self._transcripts: list[tuple[float, str]] = []
+        self._in_flight = False
+        self.display_lines: tuple[str, str, str] | None = None
+
+    def add_transcript(self, transcript: str, *, completed_at: float) -> bool:
+        now = self._clock()
+        self._prune(now)
+        if not transcript or completed_at < now - self._window_seconds:
+            return False
+        self._transcripts.append((completed_at, transcript))
+        return True
+
+    def begin_update(self) -> SummaryRequest | None:
+        if self._in_flight:
+            return None
+        self._prune(self._clock())
+        if not self._transcripts:
+            return None
+
+        self._in_flight = True
+        return SummaryRequest(tuple(text for _, text in self._transcripts))
+
+    def succeed_update(self, *, display_lines: tuple[str, str, str]) -> None:
+        if not self._in_flight:
             raise RuntimeError("No summary update is in progress")
-        self.context_memory = context_memory
         self.display_lines = display_lines
-        self._in_flight = None
+        self._in_flight = False
 
     def fail_update(self) -> None:
-        if self._in_flight is None:
+        if not self._in_flight:
             raise RuntimeError("No summary update is in progress")
-        self._pending.appendleft(self._in_flight)
-        self._in_flight = None
-        self._trim_pending()
+        self._in_flight = False
 
-    @property
-    def pending_cycles(self) -> int:
-        return len(self._pending) + bool(self._current)
-
-    def _close_current_cycle(self) -> None:
-        if self._current:
-            self._pending.append(tuple(self._current))
-            self._current.clear()
-            self._trim_pending()
-
-    def _trim_pending(self) -> None:
-        while len(self._pending) > self._max_cycles:
-            self._pending.popleft()
-            self.dropped_cycles += 1
+    def _prune(self, now: float) -> None:
+        cutoff = now - self._window_seconds
+        self._transcripts = [
+            (completed_at, text)
+            for completed_at, text in self._transcripts
+            if completed_at >= cutoff
+        ]
 
 
 class TurnTracker:
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = monotonic) -> None:
+        self._clock = clock
         self._sequence_by_item: dict[str, int] = {}
         self._resolved: dict[int, CompletedTurn | None] = {}
         self._next_release = 0
@@ -111,7 +103,9 @@ class TurnTracker:
 
     def complete(self, item_id: str, transcript: str) -> list[CompletedTurn]:
         sequence = self._require_sequence(item_id)
-        self._resolved[sequence] = CompletedTurn(sequence, item_id, transcript)
+        self._resolved[sequence] = CompletedTurn(
+            sequence, item_id, transcript, self._clock()
+        )
         return self._drain()
 
     def fail(self, item_id: str) -> list[CompletedTurn]:

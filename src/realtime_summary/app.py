@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import platform
 import sys
+from dataclasses import replace
+from math import isfinite
 from pathlib import Path
 from time import monotonic
 from uuid import uuid4
@@ -13,7 +16,13 @@ from google import genai
 
 from . import __version__
 from .audio import AudioChunkQueue, MicrophoneInput
-from .config import ConfigurationError, Settings
+from .config import (
+    DEFAULT_SUMMARY_INTERVAL_SECONDS,
+    DEFAULT_SUMMARY_MAX_CHARS,
+    MIN_SUMMARY_MAX_CHARS,
+    ConfigurationError,
+    Settings,
+)
 from .diagnostics import (
     close_diagnostics,
     configure_diagnostics,
@@ -50,6 +59,8 @@ async def run(settings: Settings) -> None:
         event="started",
         app_version=__version__,
         python_version=platform.python_version(),
+        summary_max_chars=settings.summary_max_chars,
+        summary_interval_seconds=settings.summary_interval_seconds,
         status="credentials_present",
     )
 
@@ -57,7 +68,6 @@ async def run(settings: Settings) -> None:
     google_client = None
     microphone = None
     pipeline = None
-    summary_task = None
     stop_status = "normal"
     try:
         log_event(
@@ -110,13 +120,16 @@ async def run(settings: Settings) -> None:
                 )
 
         google_client = genai.Client(api_key=settings.gemini_api_key)
-        summary_state = SummaryState(max_cycles=3)
+        summary_state = SummaryState(window_seconds=settings.summary_window_seconds)
         pipeline = TextProcessingPipeline(
-            processor=GeminiTextProcessor(google_client),
+            processor=GeminiTextProcessor(
+                google_client, summary_max_chars=settings.summary_max_chars
+            ),
             summary_state=summary_state,
             on_english=lambda text: update_obs(ENGLISH_CAPTION, text),
             on_summary=lambda text: update_obs(JAPANESE_SUMMARY, text),
             logger=logger,
+            summary_interval_seconds=settings.summary_interval_seconds,
         )
 
         def submit_turn(turn: CompletedTurn) -> None:
@@ -139,9 +152,6 @@ async def run(settings: Settings) -> None:
             logger=logger,
         )
 
-        summary_task = asyncio.create_task(
-            pipeline.run_summary_loop(settings.summary_interval_seconds)
-        )
         microphone.start(asyncio.get_running_loop())
         print("字幕・英訳・概要の更新を開始しました。終了するには Ctrl+C を押してください。")
         await transcriber.run(chunks)
@@ -163,9 +173,6 @@ async def run(settings: Settings) -> None:
                     event="microphone_close_failed",
                     exc=exc,
                 )
-        if summary_task is not None:
-            summary_task.cancel()
-            await asyncio.gather(summary_task, return_exceptions=True)
         if pipeline is not None:
             await pipeline.close()
         if obs_client is not None:
@@ -200,9 +207,55 @@ async def run(settings: Settings) -> None:
         close_diagnostics(logger)
 
 
-def main() -> int:
+def _summary_max_chars(value: str) -> int:
     try:
-        settings = Settings.from_environment()
+        max_chars = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Nには4以上の整数を指定してください。") from exc
+    if max_chars < MIN_SUMMARY_MAX_CHARS:
+        raise argparse.ArgumentTypeError("Nには4以上の整数を指定してください。")
+    return max_chars
+
+
+def _summary_interval_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "SECONDSには正の秒数を指定してください。"
+        ) from exc
+    if not isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("SECONDSには正の秒数を指定してください。")
+    return seconds
+
+
+def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="OBS向け字幕・概要生成ツール")
+    parser.add_argument(
+        "--summary-max-chars",
+        type=_summary_max_chars,
+        default=DEFAULT_SUMMARY_MAX_CHARS,
+        metavar="N",
+        help="概要の1行あたりの最大文字数。4以上、既定値は30。",
+    )
+    parser.add_argument(
+        "--summary-interval-seconds",
+        type=_summary_interval_seconds,
+        default=DEFAULT_SUMMARY_INTERVAL_SECONDS,
+        metavar="SECONDS",
+        help="概要更新の最短間隔。確定発話時に判定。既定値は10秒。",
+    )
+    return parser.parse_args(argv)
+
+
+def main() -> int:
+    args = parse_cli_args()
+    try:
+        settings = replace(
+            Settings.from_environment(),
+            summary_max_chars=args.summary_max_chars,
+            summary_interval_seconds=args.summary_interval_seconds,
+        )
     except ConfigurationError as exc:
         print(f"設定エラー: {exc}", file=sys.stderr)
         return 2

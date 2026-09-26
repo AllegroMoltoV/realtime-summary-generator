@@ -12,6 +12,11 @@ class ConfigurationError(ValueError):
     """実行に必要な設定が不足している。"""
 
 
+DEFAULT_SUMMARY_MAX_CHARS = 30
+MIN_SUMMARY_MAX_CHARS = 4
+DEFAULT_SUMMARY_INTERVAL_SECONDS = 10.0
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     openai_api_key: str = field(repr=False)
@@ -20,7 +25,9 @@ class Settings:
     log_level: str = "INFO"
     obs_host: str = "127.0.0.1"
     obs_port: int = 4455
-    summary_interval_seconds: float = 20.0
+    summary_interval_seconds: float = DEFAULT_SUMMARY_INTERVAL_SECONDS
+    summary_window_seconds: float = 300.0
+    summary_max_chars: int = DEFAULT_SUMMARY_MAX_CHARS
     audio_input_device: int | None = None
 
     @classmethod

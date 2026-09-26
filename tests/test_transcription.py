@@ -125,8 +125,8 @@ async def test_router_delivers_completed_transcripts_in_commit_order() -> None:
     )
 
     assert completed == [
-        CompletedTurn(0, "item-a", "最初"),
-        CompletedTurn(1, "item-b", "二番目"),
+        CompletedTurn(0, "item-a", "最初", 0.0),
+        CompletedTurn(1, "item-b", "二番目", 0.0),
     ]
     assert displayed[-1] == "二番目"
 
@@ -200,7 +200,7 @@ async def test_failed_turn_does_not_block_the_following_turn() -> None:
         }
     )
 
-    assert completed == [CompletedTurn(1, "item-b", "後続の発話")]
+    assert completed == [CompletedTurn(1, "item-b", "後続の発話", 0.0)]
 
 
 def test_session_uses_pcm24k_transcription_and_server_vad() -> None:
@@ -325,7 +325,7 @@ async def test_reconnect_starts_with_fresh_turn_order_state() -> None:
     with pytest.raises(RealtimeApiError, match="invalid_request"):
         await transcriber.run(AudioChunkQueue())
 
-    assert completed == [CompletedTurn(0, "new-item", "再接続後")]
+    assert completed == [CompletedTurn(0, "new-item", "再接続後", 0.0)]
 
 
 @pytest.mark.asyncio
