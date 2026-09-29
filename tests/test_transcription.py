@@ -26,6 +26,7 @@ from realtime_summary.transcription import (
 class _FakeWebSocket:
     def __init__(self, events: list[str | BaseException]) -> None:
         self._events = events
+        self.sent: list[dict[str, object]] = []
 
     async def __aenter__(self) -> _FakeWebSocket:
         return self
@@ -33,8 +34,8 @@ class _FakeWebSocket:
     async def __aexit__(self, *_args: object) -> None:
         return None
 
-    async def send(self, _message: str) -> None:
-        return None
+    async def send(self, message: str) -> None:
+        self.sent.append(json.loads(message))
 
     def __aiter__(self) -> _FakeWebSocket:
         return self
@@ -211,6 +212,7 @@ def test_session_uses_pcm24k_transcription_and_server_vad() -> None:
     assert event["session"]["type"] == "transcription"
     assert audio_input["format"] == {"type": "audio/pcm", "rate": 24000}
     assert audio_input["transcription"]["model"] == "gpt-transcribe"
+    assert "keywords" not in audio_input["transcription"]
     assert audio_input["turn_detection"] == {
         "type": "server_vad",
         "threshold": 0.5,
@@ -420,6 +422,8 @@ async def test_transcriber_logs_websocket_close_details(tmp_path) -> None:
         ),
     ]
 
+    sessions = list(connections)
+
     def connect_factory(*_args: object, **_kwargs: object) -> _FakeWebSocket:
         return connections.pop(0)
 
@@ -427,10 +431,12 @@ async def test_transcriber_logs_websocket_close_details(tmp_path) -> None:
         return None
 
     logger = configure_diagnostics(tmp_path, run_id="run-close", level="DEBUG")
+    keywords = ("架空ブランド", "配信用語")
     transcriber = RealtimeTranscriber(
         api_key="test-key",
         router=_router(),
         logger=logger,
+        keywords=keywords,
         connect_factory=connect_factory,
         sleep=sleep,
         jitter=lambda: 0.0,
@@ -441,6 +447,11 @@ async def test_transcriber_logs_websocket_close_details(tmp_path) -> None:
     close_diagnostics(logger)
 
     records = _read_records(tmp_path / "realtime-summary.jsonl")
+    for session in sessions:
+        transcription = session.sent[0]["session"]["audio"]["input"]["transcription"]
+        assert transcription["keywords"] == list(keywords)
+    serialized = json.dumps(records, ensure_ascii=False)
+    assert all(keyword not in serialized for keyword in keywords)
     failure = next(record for record in records if record["event"] == "connection_lost")
     assert failure["exception_type"] == "ConnectionClosedError"
     assert failure["error_code"] == 1006

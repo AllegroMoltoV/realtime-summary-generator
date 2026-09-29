@@ -25,6 +25,12 @@ flowchart LR
 
 概要生成では `temperature=0` を指定します。
 
+## 文字起こしの固有名詞ヒント
+
+`.env` または環境変数の `OPENAI_TRANSCRIPTION_KEYWORDS` に JSON 文字列配列を指定できます。同名の環境変数を優先し、起動時に設定を読み込みます。読み込んだ語句は OpenAI セッションの `audio.input.transcription.keywords` に渡し、再接続時も同じ語句を送信します。未設定、空の値、空配列の場合は `keywords` を送りません。
+
+起動時に JSON 配列と要素の形式を検証します。空白だけの語句、API が禁止する `<`、`>`、改行を含む語句を拒否し、各語句の前後の空白を除去します。設定エラーと診断ログには語句を含めません。ヒントは認識の参考情報であり、出力の表記を保証するものではありません。使い方は[README の設定](../README.md#文字起こしの固有名詞ヒント)、仕様は[OpenAI の文字起こしガイド](https://developers.openai.com/api/docs/guides/transcription#improve-transcription-quality)を参照してください。
+
 ## 構成要素
 
 | ファイル | 役割 |
@@ -77,6 +83,7 @@ OBS WebSocket の `SetInputSettings` で、Text (GDI+) ソースの `text` だ�
 | データ | 送信先 | ツールによるローカル保存 |
 | --- | --- | --- |
 | マイク音声 | OpenAI Realtime API | なし |
+| 固有名詞ヒント | OpenAI Realtime API | 利用者の `.env` で管理。診断ログには記録しない |
 | 確定した日本語発話 | Gemini API | 履歴ファイルなし。概要用にメモリへ保持し、次の追加時と生成時に直近 5 分へ絞る |
 | 日本語字幕、英語字幕、概要 | ローカルの OBS WebSocket | 履歴は保存しない |
 | 処理時間、件数、エラー種別 | `.logs/realtime-summary.jsonl` | 現行 1 ファイルと過去 5 ファイル。各最大 5 MiB |
@@ -96,5 +103,6 @@ OBS がシーンコレクションを保存すると、表示中の文字列が 
 
 ## 更新情報
 
+- 0.3.0 (2026-09-29): 固有名詞ヒントの設定、検証、送信先を反映。
 - 0.2.0 (2026-09-26): 概要の更新契機、直近 5 分の入力、起動引数と行長の診断を反映。
 - 0.1.0 (2026-09-16): 初版を公開。

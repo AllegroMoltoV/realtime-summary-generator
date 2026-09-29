@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -9,12 +10,34 @@ from dotenv import dotenv_values
 
 
 class ConfigurationError(ValueError):
-    """実行に必要な設定が不足している。"""
+    """実行に必要な設定が不足している、または形式が不正。"""
 
 
 DEFAULT_SUMMARY_MAX_CHARS = 30
 MIN_SUMMARY_MAX_CHARS = 4
 DEFAULT_SUMMARY_INTERVAL_SECONDS = 10.0
+
+
+def _transcription_keywords(raw: str) -> tuple[str, ...]:
+    if not raw.strip():
+        return ()
+    try:
+        keywords = json.loads(raw)
+    except json.JSONDecodeError:
+        raise ConfigurationError(
+            "OPENAI_TRANSCRIPTION_KEYWORDS must be a JSON array of strings"
+        ) from None
+    if not isinstance(keywords, list) or any(
+        not isinstance(keyword, str) or not keyword.strip() for keyword in keywords
+    ):
+        raise ConfigurationError(
+            "OPENAI_TRANSCRIPTION_KEYWORDS must be a JSON array of non-empty strings"
+        )
+    if any(char in keyword for keyword in keywords for char in "<>\r\n"):
+        raise ConfigurationError(
+            "OPENAI_TRANSCRIPTION_KEYWORDS must not contain <, >, CR, or LF"
+        )
+    return tuple(keyword.strip() for keyword in keywords)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +52,7 @@ class Settings:
     summary_window_seconds: float = 300.0
     summary_max_chars: int = DEFAULT_SUMMARY_MAX_CHARS
     audio_input_device: int | None = None
+    transcription_keywords: tuple[str, ...] = field(default=(), repr=False)
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -73,4 +97,7 @@ class Settings:
             obs_websocket_password=values["OBS_WEBSOCKET_PASSWORD"],
             log_level=log_level,
             audio_input_device=audio_input_device,
+            transcription_keywords=_transcription_keywords(
+                values.get("OPENAI_TRANSCRIPTION_KEYWORDS", "")
+            ),
         )

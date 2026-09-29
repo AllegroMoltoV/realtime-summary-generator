@@ -136,7 +136,24 @@ OBS WebSocket は OBS Studio 32.2.2 に同梱されているため、別途プ�
 | `GEMINI_API_KEY` | はい | なし | Gemini API キー |
 | `OBS_WEBSOCKET_PASSWORD` | はい | なし | OBS WebSocket の認証パスワード |
 | `AUDIO_INPUT_DEVICE` | いいえ | Windows の既定入力 | `sounddevice` が表示する数値 ID |
+| `OPENAI_TRANSCRIPTION_KEYWORDS` | いいえ | ヒントなし | 固有名詞などのヒントを指定する JSON 文字列配列 |
 | `LOG_LEVEL` | いいえ | `INFO` | `DEBUG`、`INFO`、`WARNING`、`ERROR` |
+
+### 文字起こしの固有名詞ヒント
+
+認識してほしい固有名詞や専門用語を `.env` の `OPENAI_TRANSCRIPTION_KEYWORDS` へ設定します。JSON の文字列配列を外側のシングルクォートで囲むと、語句を囲むダブルクォートのエスケープが不要です。
+
+```dotenv
+OPENAI_TRANSCRIPTION_KEYWORDS='["語句A","語句B"]'
+```
+
+語句を追加するときは、配列内へコンマで区切って追加します。設定は起動時に読み込むため、変更後はツールを再起動してください。未設定、空の値、空配列 `[]` の場合はヒントを送りません。不正な JSON、文字列以外の要素、空白だけの語句、`<`、`>`、改行を含む語句を指定すると、起動時に設定エラーで終了します。各語句の前後の空白は除去します。
+
+語句は OpenAI の文字起こしへヒントとして送信します。認識結果の表記を保証するものではありません。詳しくは[OpenAI の文字起こし仕様](https://developers.openai.com/api/docs/guides/transcription#improve-transcription-quality)を参照してください。
+
+個別の語句は Git 管理対象外の `.env` で管理し、`.env.example` へ書き込まないでください。ツールの診断ログへ語句を記録しません。
+
+### 入力デバイス
 
 入力デバイスの一覧は次のコマンドで表示できます。
 
@@ -165,6 +182,7 @@ OpenAI Realtime API との接続が一時的に切れた場合は、最大 5 回
 ## データの扱い
 
 - マイク音声を OpenAI Realtime API へ送信します。
+- 設定した固有名詞ヒントも OpenAI Realtime API へ送信します。
 - 確定した日本語発話を英訳と概要生成のため Gemini API へ送信します。
 - 概要用の確定発話は実行中のメモリに保持し、生成時には直近 5 分へ絞ります。
 - 字幕と概要をローカルの OBS WebSocket へ送信します。
@@ -196,5 +214,6 @@ OpenAI Realtime API との接続が一時的に切れた場合は、最大 5 回
 
 ## 更新情報
 
+- 0.3.0 (2026-09-29): `.env` から文字起こしの固有名詞ヒントを指定する設定を追加。
 - 0.2.0 (2026-09-26): 確定発話を起点とする概要更新、直近 5 分の入力、文字数と更新間隔の起動引数、発言根拠・時制の指示、行別文字数の診断を追加。
 - 0.1.0 (2026-09-16): 日本語字幕、英語字幕、日本語 3 行概要、OBS WebSocket 出力、`.env` 読込みを含む初版を公開。

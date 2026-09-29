@@ -92,7 +92,13 @@ def build_audio_append(pcm: bytes) -> dict[str, str]:
     }
 
 
-def build_session_update() -> dict[str, Any]:
+def build_session_update(*, keywords: tuple[str, ...] = ()) -> dict[str, Any]:
+    transcription: dict[str, Any] = {
+        "model": "gpt-transcribe",
+        "prompt": "日本語の一人語り。固有名詞、数字、英単語を正確に転写する。",
+    }
+    if keywords:
+        transcription["keywords"] = list(keywords)
     return {
         "type": "session.update",
         "session": {
@@ -100,10 +106,7 @@ def build_session_update() -> dict[str, Any]:
             "audio": {
                 "input": {
                     "format": {"type": "audio/pcm", "rate": 24000},
-                    "transcription": {
-                        "model": "gpt-transcribe",
-                        "prompt": "日本語の一人語り。固有名詞、数字、英単語を正確に転写する。",
-                    },
+                    "transcription": transcription,
                     "turn_detection": {
                         "type": "server_vad",
                         "threshold": 0.5,
@@ -190,6 +193,7 @@ class RealtimeTranscriber:
         api_key: str,
         router: TranscriptionEventRouter,
         logger: logging.Logger,
+        keywords: tuple[str, ...] = (),
         connect_factory: ConnectFactory = connect,
         sleep: Sleep = asyncio.sleep,
         jitter: Jitter = random.random,
@@ -199,6 +203,7 @@ class RealtimeTranscriber:
         self._api_key = api_key
         self._router = router
         self._logger = logger
+        self._keywords = keywords
         self._connect_factory = connect_factory
         self._sleep = sleep
         self._jitter = jitter
@@ -305,7 +310,11 @@ class RealtimeTranscriber:
                 event="connected",
                 retry_count=retry_count,
             )
-            await websocket.send(json.dumps(build_session_update(), ensure_ascii=False))
+            await websocket.send(
+                json.dumps(
+                    build_session_update(keywords=self._keywords), ensure_ascii=False
+                )
+            )
             sender = asyncio.create_task(self._send_audio(websocket, chunks))
             receiver = asyncio.create_task(self._receive_events(websocket))
             try:

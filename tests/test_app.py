@@ -1,4 +1,5 @@
 import json
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -93,3 +94,36 @@ async def test_failed_startup_logs_error_stop_status(tmp_path, monkeypatch) -> N
     assert "openai-secret" not in serialized
     assert "gemini-secret" not in serialized
     assert "obs-secret" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_run_passes_transcription_keywords_without_logging_them(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app.obs, "ReqClient", Mock())
+    monkeypatch.setattr(app, "ObsTextOutput", Mock())
+    client = Mock()
+    client.aio.aclose = AsyncMock()
+    monkeypatch.setattr(app.genai, "Client", Mock(return_value=client))
+    pipeline = Mock()
+    pipeline.close = AsyncMock()
+    monkeypatch.setattr(app, "TextProcessingPipeline", Mock(return_value=pipeline))
+    monkeypatch.setattr(app, "MicrophoneInput", Mock())
+    transcriber = Mock()
+    transcriber.run = AsyncMock()
+    factory = Mock(return_value=transcriber)
+    monkeypatch.setattr(app, "RealtimeTranscriber", factory)
+    settings = Settings(
+        openai_api_key="openai-secret",
+        gemini_api_key="gemini-secret",
+        obs_websocket_password="obs-secret",
+        transcription_keywords=("架空ブランド", "配信用語"),
+    )
+
+    await app.run(settings)
+
+    assert factory.call_args.kwargs["keywords"] == settings.transcription_keywords
+    transcriber.run.assert_awaited_once()
+    log = (tmp_path / ".logs" / "realtime-summary.jsonl").read_text(encoding="utf-8")
+    assert all(keyword not in log for keyword in settings.transcription_keywords)

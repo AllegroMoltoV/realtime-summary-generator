@@ -150,6 +150,7 @@ async def run(settings: Settings) -> None:
             api_key=settings.openai_api_key,
             router=router,
             logger=logger,
+            keywords=settings.transcription_keywords,
         )
 
         microphone.start(asyncio.get_running_loop())
