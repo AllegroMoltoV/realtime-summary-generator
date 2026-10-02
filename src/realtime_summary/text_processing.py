@@ -17,7 +17,7 @@ from .state import CompletedTurn, SummaryState
 
 
 GEMINI_MODEL = "gemini-3.1-flash-lite"
-SUMMARY_TRUNCATION_SUFFIX = "(…)"
+SUMMARY_TRUNCATION_SUFFIX = "…"
 
 
 class InvalidSummaryResponse(ValueError):

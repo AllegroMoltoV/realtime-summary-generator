@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "realtime-summary-generator"
-version = "0.3.0"
+version = "0.3.1"
 description = "OBS向けの日本語字幕、英語字幕、日本語概要を生成する個人用ツール"
 readme = "README.md"
 requires-python = ">=3.13"

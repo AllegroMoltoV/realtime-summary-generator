@@ -59,12 +59,12 @@ def test_summary_response_limits_japanese_characters_and_marks_overflow() -> Non
         max_chars=6,
     )
 
-    assert result.display_lines == ("日本語(…)", "日本語文字列", "")
+    assert result.display_lines == ("日本語文字…", "日本語文字列", "")
     assert result.model_line_chars == (8, 6, 0)
     assert all(len(line) <= 6 for line in result.display_lines)
     assert parse_summary_response(
         '{"display_lines":["日本語の説明", "", ""]}', max_chars=4
-    ).display_lines[0] == "日(…)"
+    ).display_lines[0] == "日本語…"
 
 
 class FakeModels:
@@ -161,7 +161,7 @@ async def test_gemini_summary_truncates_overlong_line_before_return() -> None:
 
     result = await processor.summarize(transcripts=("日本語文字列追加",))
 
-    assert result.summary.display_lines == ("日本語(…)", "", "")
+    assert result.summary.display_lines == ("日本語文字…", "", "")
     assert result.summary.model_line_chars == (8, 0, 0)
 
 
