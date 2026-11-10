@@ -1,5 +1,9 @@
 # Realtime Summary Generator
 
+> **このツールの開発は終了しました。** 後継の OBS Studio のプラグイン [リアルタイム字幕・翻訳・要約 / Realtime Translate & Summary](https://github.com/AllegroMoltoV/obs-realtime-translate-summary) をお使いください。Python の実行環境や OBS WebSocket の設定は不要で、OBS の画面の中で設定して使えます。必要な API キーは OpenAI の 1 つだけです。
+>
+> This tool is no longer maintained. Please use the successor OBS Studio plugin [Realtime Translate & Summary](https://github.com/AllegroMoltoV/obs-realtime-translate-summary). It requires no Python environment or OBS WebSocket setup, and only one OpenAI API key.
+
 日本語のマイク音声から、日本語字幕、英語字幕、日本語の最大 3 行の概要を生成し、OBS Studio へリアルタイム表示する Windows 向けツールです。音声認識と文章生成は外部 API で処理するため、配信 PC の GPU を使いません。
 
 個人利用を前提に改善中の PoC です。Windows、Python 3.13、OBS Studio 32.2.2 で動作を確認しています。
